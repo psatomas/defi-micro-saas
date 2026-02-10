@@ -1,1 +1,2 @@
-console.log("Backend scaffold ready");
+console.log("Backend running (experimental mode)");
+
