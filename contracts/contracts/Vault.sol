@@ -45,8 +45,30 @@ contract Vault {
     //                      EXTERNAL FUNCTIONS
     // =============================================================
 
-    function deposit(uint256 assets) external {
-        revert("NOT_IMPLEMENTED");
+    function deposit(uint256 assets) external returns (uint256 shares) {
+
+        require(assets > 0, "ZERO_ASSETS");
+
+        uint256 _totalShares = totalShares;
+        uint256 _totalAssets = totalAssets();
+
+        if (_totalShares == 0) {
+            shares = assets;
+        } else {
+            shares = (assets * _totalShares) / _totalAssets;
+        }
+
+        require(shares > 0, "ZERO_SHARES");
+
+        sharesOf[msg.sender] += shares;
+        totalShares = _totalShares + shares;
+
+        bool success = asset.transferFrom(msg.sender, address(this), assets);
+        require(success, "TRANSFER_FAILED");
+
+        emit Deposited(msg.sender, assets, shares);
+
+        return shares;
     }
 
 
