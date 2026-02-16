@@ -72,9 +72,38 @@ contract Vault {
     }
 
 
-    function withdraw(uint256 shares) external {
-        revert("NOT_IMPLEMENTED");
+    function withdraw(uint256 shares) external returns (uint256 assets) {
+
+        require(shares > 0, "ZERO_SHARES");
+
+        uint256 userShares = sharesOf[msg.sender];
+        require(userShares >= shares, "INSUFFICIENT_SHARES");
+
+        uint256 _totalShares = totalShares;
+        uint256 _totalAssets = totalAssets();
+
+        assets = (shares * _totalAssets) / _totalShares;
+
+        require(assets > 0, "ZERO_ASSETS");
+
+
+        // Effects
+
+        sharesOf[msg.sender] = userShares - shares;
+        totalShares = _totalShares - shares;
+
+
+        // Interaction
+
+        bool success = asset.transfer(msg.sender, assets);
+        require(success, "TRANSFER_FAILED");
+
+
+        emit Withdrawn(msg.sender, assets, shares);
+
+        return assets;
     }
+
 
 
     // =============================================================
