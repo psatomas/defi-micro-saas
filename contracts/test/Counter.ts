@@ -1,46 +1,53 @@
-import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import hre from "hardhat";
 
-import { network } from "hardhat";
+// --- simple fixture loader
+type Fixture<T> = () => Promise<T>;
+function useFixture<T>(fixture: Fixture<T>): Fixture<T> {
+  let cache: T | undefined;
+  return async () => {
+    if (!cache) cache = await fixture();
+    return cache;
+  };
+}
 
-describe("Counter", async function () {
-  const { viem } = await network.connect();
-  const publicClient = await viem.getPublicClient();
+describe("Counter", () => {
 
-  it("Should emit the Increment event when calling the inc() function", async function () {
+  const deployFixture = useFixture(async () => {
+    const { viem } = await hre.network.connect();
+    const [alice] = await viem.getWalletClients();
+
     const counter = await viem.deployContract("Counter");
 
-    await viem.assertions.emitWithArgs(
-      counter.write.inc(),
-      counter,
-      "Increment",
-      [1n],
-    );
+    return { counter, alice };
   });
 
-  it("The sum of the Increment events should match the current value", async function () {
-    const counter = await viem.deployContract("Counter");
-    const deploymentBlockNumber = await publicClient.getBlockNumber();
-
-    // run a series of increments
-    for (let i = 1n; i <= 10n; i++) {
-      await counter.write.incBy([i]);
-    }
-
-    const events = await publicClient.getContractEvents({
-      address: counter.address,
-      abi: counter.abi,
-      eventName: "Increment",
-      fromBlock: deploymentBlockNumber,
-      strict: true,
-    });
-
-    // check that the aggregated events match the current value
-    let total = 0n;
-    for (const event of events) {
-      total += event.args.by;
-    }
-
-    assert.equal(total, await counter.read.x());
+  it("Initial value is 0", async () => {
+    const { counter } = await deployFixture();
+    const value = await counter.read.number();
+    assert.equal(value, 0n);
   });
+
+  it("Increment works", async () => {
+    const { counter, alice } = await deployFixture();
+
+    // write transaction
+    await counter.write.inc([5n], { account: alice.account });
+
+    // read current state
+    const value = await counter.read.number();
+    assert.equal(value, 5n);
+  });
+
+  it("Multiple increments accumulate", async () => {
+    const { counter, alice } = await deployFixture();
+
+    await counter.write.inc([2n], { account: alice.account });
+    await counter.write.inc([3n], { account: alice.account });
+
+    const value = await counter.read.number();
+    assert.equal(value, 5n);
+  });
+
 });
