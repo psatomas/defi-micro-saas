@@ -2,116 +2,74 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @title Deterministic Staking Vault
-/// @notice Minimal share-based vault implementing VAULT_SPEC.md
 contract Vault {
-
-    // =============================================================
-    //                            EVENTS
-    // =============================================================
-
-    event Deposited(address indexed user, uint256 assets, uint256 shares);
-
-    event Withdrawn(address indexed user, uint256 assets, uint256 shares);
-
-
-    // =============================================================
-    //                       IMMUTABLE STORAGE
-    // =============================================================
+    using Math for uint256;
 
     IERC20 public immutable asset;
 
-
-    // =============================================================
-    //                         STATE STORAGE
-    // =============================================================
-
     uint256 public totalShares;
+    uint256 private _totalAssets;
 
     mapping(address => uint256) public sharesOf;
 
-
-    // =============================================================
-    //                          CONSTRUCTOR
-    // =============================================================
+    event Deposited(address indexed user, uint256 assets, uint256 shares);
+    event Withdrawn(address indexed user, uint256 assets, uint256 shares);
 
     constructor(address _asset) {
         asset = IERC20(_asset);
     }
 
-
-    // =============================================================
-    //                      EXTERNAL FUNCTIONS
-    // =============================================================
-
-    function deposit(uint256 assets) external returns (uint256 shares) {
-
+    function deposit(uint256 assets)
+        external
+        returns (uint256 shares)
+    {
         require(assets > 0, "ZERO_ASSETS");
 
-        uint256 _totalShares = totalShares;
-        uint256 _totalAssets = totalAssets();
+        uint256 balanceBefore = asset.balanceOf(address(this));
+        asset.transferFrom(msg.sender, address(this), assets);
+        uint256 received = asset.balanceOf(address(this)) - balanceBefore;
+        require(received > 0, "ZERO_RECEIVED");
 
-        if (_totalShares == 0) {
-            shares = assets;
+        if (totalShares == 0 || _totalAssets == 0) {
+            // first deposit, mint 1:1
+            shares = received;
         } else {
-            shares = (assets * _totalShares) / _totalAssets;
+            // calculate shares based on previous totalAssets (before this deposit)
+            shares = (received * totalShares) / _totalAssets;
+            require(shares > 0, "ZERO_SHARES"); // reject deposits too small
         }
 
-        require(shares > 0, "ZERO_SHARES");
-
         sharesOf[msg.sender] += shares;
-        totalShares = _totalShares + shares;
+        totalShares += shares;
+        _totalAssets += received;
 
-        bool success = asset.transferFrom(msg.sender, address(this), assets);
-        require(success, "TRANSFER_FAILED");
-
-        emit Deposited(msg.sender, assets, shares);
-
-        return shares;
+        emit Deposited(msg.sender, received, shares);
     }
 
-
-    function withdraw(uint256 shares) external returns (uint256 assets) {
-
+    function withdraw(uint256 shares)
+        external
+        returns (uint256 assets)
+    {
         require(shares > 0, "ZERO_SHARES");
-
         uint256 userShares = sharesOf[msg.sender];
         require(userShares >= shares, "INSUFFICIENT_SHARES");
 
-        uint256 _totalShares = totalShares;
-        uint256 _totalAssets = totalAssets();
-
-        assets = (shares * _totalAssets) / _totalShares;
-
+        // calculate assets proportional to shares (floor division to avoid over-withdraw)
+        assets = (shares * _totalAssets) / totalShares;
         require(assets > 0, "ZERO_ASSETS");
 
+        sharesOf[msg.sender] -= shares;
+        totalShares -= shares;
+        _totalAssets -= assets;
 
-        // Effects
-
-        sharesOf[msg.sender] = userShares - shares;
-        totalShares = _totalShares - shares;
-
-
-        // Interaction
-
-        bool success = asset.transfer(msg.sender, assets);
-        require(success, "TRANSFER_FAILED");
-
+        asset.transfer(msg.sender, assets);
 
         emit Withdrawn(msg.sender, assets, shares);
-
-        return assets;
     }
 
-
-
-    // =============================================================
-    //                        VIEW FUNCTIONS
-    // =============================================================
-
-    function totalAssets() public view returns (uint256) {
-        return asset.balanceOf(address(this));
+    function totalAssets() external view returns (uint256) {
+        return _totalAssets;
     }
-
 }
