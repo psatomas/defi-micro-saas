@@ -72,4 +72,9 @@ contract Vault {
     function totalAssets() external view returns (uint256) {
         return _totalAssets;
     }
+
+    function sharePrice() public view returns (uint256) {
+    if (totalShares == 0) return 1e18;
+    return Math.mulDiv(_totalAssets, 1e18, totalShares);
+    }
 }
