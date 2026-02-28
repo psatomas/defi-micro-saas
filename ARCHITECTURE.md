@@ -309,3 +309,23 @@ Practice infra-conscious backend design
 Build deterministic, reproducible systems
 
 Transition toward protocol engineering
+
+---
+
+## Strategic Direction Shift — Autonomous Treasury Protocol
+
+The Vault is evolving from a generic yield container into a programmable on-chain treasury primitive.
+
+Target users:
+- Early-stage DAOs
+- Web3 startups
+- On-chain organizations
+
+Design evolution:
+
+1. Introduce TreasuryVault abstraction
+2. Add pluggable strategy modules
+3. Implement risk-bound capital allocation
+4. Enforce economic invariants at protocol level
+
+The goal is to transform the current secure Vault base into a modular treasury management protocol with extensible strategy integration and policy enforcement.
