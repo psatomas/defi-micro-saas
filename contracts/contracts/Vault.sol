@@ -11,20 +11,26 @@ contract Vault {
 
     uint256 public totalShares;
     uint256 private _totalAssets;
+    uint256 public maxDepositCap;
 
     mapping(address => uint256) public sharesOf;
 
     event Deposited(address indexed user, uint256 assets, uint256 shares);
     event Withdrawn(address indexed user, uint256 assets, uint256 shares);
 
-    constructor(address _asset) {
+    constructor(address _asset, uint256 _maxDepositCap) {
         asset = IERC20(_asset);
+        maxDepositCap = _maxDepositCap;
     }
 
     function deposit(uint256 assets)
         external
         returns (uint256 shares)
     {
+        require(
+            _totalAssets + assets <= maxDepositCap,
+            "Deposit cap exceeded"
+    );
         require(assets > 0, "ZERO_ASSETS");
 
         uint256 balanceBefore = asset.balanceOf(address(this));
