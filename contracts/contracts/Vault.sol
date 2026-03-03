@@ -81,6 +81,9 @@ contract Vault {
 
     function sharePrice() public view returns (uint256) {
     if (totalShares == 0) return 1e18;
-    return Math.mulDiv(_totalAssets, 1e18, totalShares);
+        return Math.mulDiv(_totalAssets, 1e18, totalShares);
+    }
+    function availableDeposit() external view returns (uint256) {
+        return maxDepositCap > _totalAssets ? maxDepositCap - _totalAssets : 0;
     }
 }
