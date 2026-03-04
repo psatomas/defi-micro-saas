@@ -86,4 +86,27 @@ contract Vault {
     function availableDeposit() external view returns (uint256) {
         return maxDepositCap > _totalAssets ? maxDepositCap - _totalAssets : 0;
     }
+    function previewDeposit(uint256 assets)
+        public
+        view
+        returns (uint256 shares)
+    {
+        if (assets == 0) return 0;
+
+        if (totalShares == 0 || _totalAssets == 0) {
+            return assets;
+        }
+
+        return (assets * totalShares) / _totalAssets;
+    }
+
+    function previewWithdraw(uint256 shares)
+        public
+        view
+        returns (uint256 assets)
+    {
+        if (shares == 0 || totalShares == 0) return 0;
+
+        return (shares * _totalAssets) / totalShares;
+    }
 }
