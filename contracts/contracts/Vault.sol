@@ -2,11 +2,12 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract Vault {
     using Math for uint256;
-
+    using SafeERC20 for IERC20;
     IERC20 public immutable asset;
 
     uint256 public totalShares;
@@ -34,7 +35,7 @@ contract Vault {
         require(assets > 0, "ZERO_ASSETS");
 
         uint256 balanceBefore = asset.balanceOf(address(this));
-        asset.transferFrom(msg.sender, address(this), assets);
+        asset.safeTransferFrom(msg.sender, address(this), assets);
         uint256 received = asset.balanceOf(address(this)) - balanceBefore;
         require(received > 0, "ZERO_RECEIVED");
 
@@ -70,7 +71,7 @@ contract Vault {
         totalShares -= shares;
         _totalAssets -= assets;
 
-        asset.transfer(msg.sender, assets);
+        asset.safeTransfer(msg.sender, assets);
 
         emit Withdrawn(msg.sender, assets, shares);
     }
