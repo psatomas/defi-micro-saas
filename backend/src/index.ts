@@ -1,7 +1,5 @@
 import { ethers } from "ethers";
-
-const RPC = "http://127.0.0.1:8545";
-const VAULT = "VAULT_ADDRESS_HERE";
+import { provider, VAULT_ADDRESS } from "./config/chain.js";
 
 const abi = [
   "event Deposited(address indexed user, uint256 assets, uint256 shares)",
@@ -10,10 +8,8 @@ const abi = [
 
 async function main() {
 
-  const provider = new ethers.JsonRpcProvider(RPC);
-
   const vault = new ethers.Contract(
-    VAULT,
+    VAULT_ADDRESS,
     abi,
     provider
   );
@@ -21,27 +17,11 @@ async function main() {
   console.log("Vault indexer started");
 
   vault.on("Deposited", (user, assets, shares) => {
-
-    console.log("Deposit detected");
-
-    console.log({
-      user,
-      assets: assets.toString(),
-      shares: shares.toString()
-    });
-
+    console.log("Deposit", user, assets.toString(), shares.toString());
   });
 
   vault.on("Withdrawn", (user, assets, shares) => {
-
-    console.log("Withdraw detected");
-
-    console.log({
-      user,
-      assets: assets.toString(),
-      shares: shares.toString()
-    });
-
+    console.log("Withdraw", user, assets.toString(), shares.toString());
   });
 
 }
