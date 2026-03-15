@@ -1,7 +1,7 @@
 // back/vaultIndexer.ts
 import { createPublicClient, http, type PublicClient } from "viem";
 import { mainnet } from "viem/chains";
-import { VaultABI } from "./VaultABI";
+import { VaultABI } from "./VaultABI.js";
 
 // Configuração
 const vaultAddress = "0xYourVaultAddressHere"; // substitua pelo endereço real

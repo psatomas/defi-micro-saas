@@ -1,5 +1,8 @@
 import { ethers } from "ethers";
 import { provider, VAULT_ADDRESS } from "./config/chain.js";
+import { logNetwork } from "./config/chain.js";
+
+await logNetwork();
 
 const abi = [
   "event Deposited(address indexed user, uint256 assets, uint256 shares)",
