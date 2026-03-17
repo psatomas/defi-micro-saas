@@ -1,8 +1,5 @@
 import { ethers } from "ethers";
-import { provider, VAULT_ADDRESS } from "./config/chain.js";
-import { logNetwork } from "./config/chain.js";
-
-await logNetwork();
+import { provider, VAULT_ADDRESS, logNetwork } from "./config/chain.js";
 
 const abi = [
   "event Deposited(address indexed user, uint256 assets, uint256 shares)",
@@ -10,6 +7,7 @@ const abi = [
 ];
 
 async function main() {
+  await logNetwork();
 
   const vault = new ethers.Contract(
     VAULT_ADDRESS,
@@ -26,8 +24,7 @@ async function main() {
   vault.on("Withdrawn", (user, assets, shares) => {
     console.log("Withdraw", user, assets.toString(), shares.toString());
   });
-
 }
 
-main();
+main().catch(console.error);
 
