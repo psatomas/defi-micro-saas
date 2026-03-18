@@ -1,43 +1,48 @@
-import { createPublicClient, http } from "viem"
-import { mainnet } from "viem/chains"
-import { VaultABI } from "../abi/VaultABI.js"
-import { onDeposit, onWithdraw, getState } from "../services/vaultState.js"
+import { ethers } from "ethers";
+import { provider, VAULT_ADDRESS, logNetwork } from "../config/chain.js";
+import {
+  applyDeposit,
+  applyWithdraw,
+  getVaultState,
+} from "../services/vaultState.js";
 
-const client = createPublicClient({
-  chain: mainnet,
-  transport: http(),
-})
+const abi = [
+  "event Deposited(address indexed user, uint256 assets, uint256 shares)",
+  "event Withdrawn(address indexed user, uint256 assets, uint256 shares)",
+];
 
-const vaultAddress = "0xYourVaultAddressHere"
+async function main() {
+  await logNetwork();
 
-client.watchContractEvent({
-  address: vaultAddress,
-  abi: VaultABI,
-  eventName: "Deposited",
-  onLogs: (logs) => {
-    for (const log of logs) {
-      const { assets, shares } = log.args as any
+  const vault = new ethers.Contract(
+    VAULT_ADDRESS,
+    abi,
+    provider
+  );
 
-      onDeposit(assets, shares)
+  console.log("Vault indexer started");
 
-      console.log("Deposit:", getState())
-    }
-  },
-})
+  vault.on("Deposited", (user, assets, shares) => {
+    applyDeposit(assets, shares);
 
-client.watchContractEvent({
-  address: vaultAddress,
-  abi: VaultABI,
-  eventName: "Withdrawn",
-  onLogs: (logs) => {
-    for (const log of logs) {
-      const { assets, shares } = log.args as any
+    console.log("Deposit", user, assets.toString(), shares.toString());
+    console.log("State", {
+      tvl: getVaultState().tvl.toString(),
+      totalShares: getVaultState().totalShares.toString(),
+      sharePrice: getVaultState().sharePrice.toString(),
+    });
+  });
 
-      onWithdraw(assets, shares)
+  vault.on("Withdrawn", (user, assets, shares) => {
+    applyWithdraw(assets, shares);
 
-      console.log("Withdraw:", getState())
-    }
-  },
-})
+    console.log("Withdraw", user, assets.toString(), shares.toString());
+    console.log("State", {
+      tvl: getVaultState().tvl.toString(),
+      totalShares: getVaultState().totalShares.toString(),
+      sharePrice: getVaultState().sharePrice.toString(),
+    });
+  });
+}
 
-console.log("VaultIndexer rodando...")
+main().catch(console.error);
