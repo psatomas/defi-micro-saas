@@ -1,35 +1,61 @@
 type VaultState = {
   tvl: bigint;
   totalShares: bigint;
+  sharePrice: bigint;
+  lastUpdatedBlock?: number;
+  lastUpdatedTx?: string;
 };
 
-const state: VaultState = {
+type VaultEventInput = {
+  assets: bigint;
+  shares: bigint;
+  blockNumber?: number;
+  txHash?: string;
+};
+
+const PRECISION = 10n ** 18n;
+
+const vaultState: VaultState = {
   tvl: 0n,
   totalShares: 0n,
+  sharePrice: PRECISION,
 };
 
-export function applyDeposit(assets: bigint, shares: bigint) {
-  state.tvl += assets;
-  state.totalShares += shares;
-}
-
-export function applyWithdraw(assets: bigint, shares: bigint) {
-  state.tvl -= assets;
-  state.totalShares -= shares;
-}
-
-export function getSharePrice(): bigint {
-  if (state.totalShares === 0n) {
-    return 1_000_000_000_000_000_000n;
+function recalculateSharePrice() {
+  if (vaultState.totalShares === 0n) {
+    vaultState.sharePrice = PRECISION;
+    return;
   }
 
-  return (state.tvl * 1_000_000_000_000_000_000n) / state.totalShares;
+  vaultState.sharePrice = (vaultState.tvl * PRECISION) / vaultState.totalShares;
+}
+
+export function updateVaultStateFromDeposit(input: VaultEventInput) {
+  vaultState.tvl += input.assets;
+  vaultState.totalShares += input.shares;
+  vaultState.lastUpdatedBlock = input.blockNumber;
+  vaultState.lastUpdatedTx = input.txHash;
+  recalculateSharePrice();
+}
+
+export function updateVaultStateFromWithdraw(input: VaultEventInput) {
+  vaultState.tvl -= input.assets;
+  vaultState.totalShares -= input.shares;
+  vaultState.lastUpdatedBlock = input.blockNumber;
+  vaultState.lastUpdatedTx = input.txHash;
+  recalculateSharePrice();
 }
 
 export function getVaultState() {
-  return {
-    tvl: state.tvl,
-    totalShares: state.totalShares,
-    sharePrice: getSharePrice(),
-  };
+  return { ...vaultState };
+}
+
+export function logVaultState() {
+  console.log("[vault-state]", {
+    tvl: vaultState.tvl.toString(),
+    totalShares: vaultState.totalShares.toString(),
+    sharePrice: vaultState.sharePrice.toString(),
+    lastUpdatedBlock: vaultState.lastUpdatedBlock,
+    lastUpdatedTx: vaultState.lastUpdatedTx,
+  });
 }

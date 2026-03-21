@@ -1,48 +1,59 @@
-import { ethers } from "ethers";
-import { provider, VAULT_ADDRESS, logNetwork } from "../config/chain.js";
+import { Contract, JsonRpcProvider } from "ethers";
+import { VAULT_ADDRESS, RPC_URL } from "../config/chain.js";
+import { VaultABI } from "../abi/VaultABI.js";
 import {
-  applyDeposit,
-  applyWithdraw,
-  getVaultState,
+  updateVaultStateFromDeposit,
+  updateVaultStateFromWithdraw,
+  logVaultState,
 } from "../services/vaultState.js";
 
-const abi = [
-  "event Deposited(address indexed user, uint256 assets, uint256 shares)",
-  "event Withdrawn(address indexed user, uint256 assets, uint256 shares)",
-];
+export async function startVaultIndexer() {
+  const provider = new JsonRpcProvider(RPC_URL);
 
-async function main() {
-  await logNetwork();
-
-  const vault = new ethers.Contract(
-    VAULT_ADDRESS,
-    abi,
-    provider
+  const network = await provider.getNetwork();
+  console.log(
+    `[vault-indexer] connected to chainId=${network.chainId.toString()} rpc=${RPC_URL}`
   );
 
-  console.log("Vault indexer started");
+  const vault = new Contract(VAULT_ADDRESS, VaultABI, provider);
 
-  vault.on("Deposited", (user, assets, shares) => {
-    applyDeposit(assets, shares);
+  console.log(`[vault-indexer] listening at vault=${VAULT_ADDRESS}`);
 
-    console.log("Deposit", user, assets.toString(), shares.toString());
-    console.log("State", {
-      tvl: getVaultState().tvl.toString(),
-      totalShares: getVaultState().totalShares.toString(),
-      sharePrice: getVaultState().sharePrice.toString(),
-    });
+  vault.on("Deposit", async (...args) => {
+    try {
+      const event = args[args.length - 1];
+      const [, assets, shares] = args;
+
+      updateVaultStateFromDeposit({
+        assets,
+        shares,
+        blockNumber: event.log.blockNumber,
+        txHash: event.log.transactionHash,
+      });
+
+      console.log("[vault-indexer] Deposit event processed");
+      logVaultState();
+    } catch (error) {
+      console.error("[vault-indexer] failed to process Deposit:", error);
+    }
   });
 
-  vault.on("Withdrawn", (user, assets, shares) => {
-    applyWithdraw(assets, shares);
+  vault.on("Withdraw", async (...args) => {
+    try {
+      const event = args[args.length - 1];
+      const [, , , assets, shares] = args;
 
-    console.log("Withdraw", user, assets.toString(), shares.toString());
-    console.log("State", {
-      tvl: getVaultState().tvl.toString(),
-      totalShares: getVaultState().totalShares.toString(),
-      sharePrice: getVaultState().sharePrice.toString(),
-    });
+      updateVaultStateFromWithdraw({
+        assets,
+        shares,
+        blockNumber: event.log.blockNumber,
+        txHash: event.log.transactionHash,
+      });
+
+      console.log("[vault-indexer] Withdraw event processed");
+      logVaultState();
+    } catch (error) {
+      console.error("[vault-indexer] failed to process Withdraw:", error);
+    }
   });
 }
-
-main().catch(console.error);
