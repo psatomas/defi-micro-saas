@@ -1,61 +1,45 @@
-type VaultState = {
+export type VaultState = {
   tvl: bigint;
   totalShares: bigint;
-  sharePrice: bigint;
-  lastUpdatedBlock?: number;
-  lastUpdatedTx?: string;
+  sharePrice: number;
 };
 
-type VaultEventInput = {
-  assets: bigint;
-  shares: bigint;
-  blockNumber?: number;
-  txHash?: string;
-};
+export function createVaultStateService() {
+  let state: VaultState = {
+    tvl: 0n,
+    totalShares: 0n,
+    sharePrice: 0,
+  };
 
-const PRECISION = 10n ** 18n;
+  function recomputeSharePrice() {
+    if (state.totalShares === 0n) {
+      state.sharePrice = 0;
+      return;
+    }
 
-const vaultState: VaultState = {
-  tvl: 0n,
-  totalShares: 0n,
-  sharePrice: PRECISION,
-};
-
-function recalculateSharePrice() {
-  if (vaultState.totalShares === 0n) {
-    vaultState.sharePrice = PRECISION;
-    return;
+    state.sharePrice =
+      Number(state.tvl) / Number(state.totalShares);
   }
 
-  vaultState.sharePrice = (vaultState.tvl * PRECISION) / vaultState.totalShares;
+  return {
+    getState(): VaultState {
+      return { ...state };
+    },
+
+    applyDeposit(assets: bigint, shares: bigint) {
+      state.tvl += assets;
+      state.totalShares += shares;
+
+      recomputeSharePrice();
+    },
+
+    applyWithdraw(assets: bigint, shares: bigint) {
+      state.tvl -= assets;
+      state.totalShares -= shares;
+
+      recomputeSharePrice();
+    },
+  };
 }
 
-export function updateVaultStateFromDeposit(input: VaultEventInput) {
-  vaultState.tvl += input.assets;
-  vaultState.totalShares += input.shares;
-  vaultState.lastUpdatedBlock = input.blockNumber;
-  vaultState.lastUpdatedTx = input.txHash;
-  recalculateSharePrice();
-}
-
-export function updateVaultStateFromWithdraw(input: VaultEventInput) {
-  vaultState.tvl -= input.assets;
-  vaultState.totalShares -= input.shares;
-  vaultState.lastUpdatedBlock = input.blockNumber;
-  vaultState.lastUpdatedTx = input.txHash;
-  recalculateSharePrice();
-}
-
-export function getVaultState() {
-  return { ...vaultState };
-}
-
-export function logVaultState() {
-  console.log("[vault-state]", {
-    tvl: vaultState.tvl.toString(),
-    totalShares: vaultState.totalShares.toString(),
-    sharePrice: vaultState.sharePrice.toString(),
-    lastUpdatedBlock: vaultState.lastUpdatedBlock,
-    lastUpdatedTx: vaultState.lastUpdatedTx,
-  });
-}
+export const vaultStateService = createVaultStateService();

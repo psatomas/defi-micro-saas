@@ -1,59 +1,27 @@
-import { Contract, JsonRpcProvider } from "ethers";
-import { VAULT_ADDRESS, RPC_URL } from "../config/chain.js";
+import { JsonRpcProvider, Contract } from "ethers";
 import { VaultABI } from "../abi/VaultABI.js";
-import {
-  updateVaultStateFromDeposit,
-  updateVaultStateFromWithdraw,
-  logVaultState,
-} from "../services/vaultState.js";
+import { vaultStateService } from "../services/vaultState.js";
 
-export async function startVaultIndexer() {
+const RPC_URL = "http://127.0.0.1:8545";
+const VAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+export async function startVaultIndexer(): Promise<void> {
+  console.log("[indexer] connecting to chain...");
+
   const provider = new JsonRpcProvider(RPC_URL);
-
-  const network = await provider.getNetwork();
-  console.log(
-    `[vault-indexer] connected to chainId=${network.chainId.toString()} rpc=${RPC_URL}`
-  );
-
   const vault = new Contract(VAULT_ADDRESS, VaultABI, provider);
 
-  console.log(`[vault-indexer] listening at vault=${VAULT_ADDRESS}`);
+  console.log("[indexer] listening for vault events...");
 
-  vault.on("Deposit", async (...args) => {
-    try {
-      const event = args[args.length - 1];
-      const [, assets, shares] = args;
+  vault.on("Deposited", (user: string, assets: bigint, shares: bigint) => {
+    console.log("[event] Deposited", { user, assets, shares });
 
-      updateVaultStateFromDeposit({
-        assets,
-        shares,
-        blockNumber: event.log.blockNumber,
-        txHash: event.log.transactionHash,
-      });
-
-      console.log("[vault-indexer] Deposit event processed");
-      logVaultState();
-    } catch (error) {
-      console.error("[vault-indexer] failed to process Deposit:", error);
-    }
+    vaultStateService.applyDeposit(assets, shares);
   });
 
-  vault.on("Withdraw", async (...args) => {
-    try {
-      const event = args[args.length - 1];
-      const [, , , assets, shares] = args;
+  vault.on("Withdrawn", (user: string, assets: bigint, shares: bigint) => {
+    console.log("[event] Withdrawn", { user, assets, shares });
 
-      updateVaultStateFromWithdraw({
-        assets,
-        shares,
-        blockNumber: event.log.blockNumber,
-        txHash: event.log.transactionHash,
-      });
-
-      console.log("[vault-indexer] Withdraw event processed");
-      logVaultState();
-    } catch (error) {
-      console.error("[vault-indexer] failed to process Withdraw:", error);
-    }
+    vaultStateService.applyWithdraw(assets, shares);
   });
 }

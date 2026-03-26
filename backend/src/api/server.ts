@@ -1,12 +1,10 @@
 import Fastify from "fastify";
-import { vaultStateService } from "../services/vaultState.js";
+import { vaultRoutes } from "./routes/vault.js";
 
 export async function startApiServer() {
   const app = Fastify();
 
-  app.get("/vault", async () => {
-    return vaultStateService.getState();
-  });
+  await app.register(vaultRoutes);
 
   await app.listen({ port: 3000 });
 
