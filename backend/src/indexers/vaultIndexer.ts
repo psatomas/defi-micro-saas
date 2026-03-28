@@ -1,7 +1,6 @@
-import { JsonRpcProvider, Contract } from "ethers";
+import { JsonRpcProvider, Contract, EventLog } from "ethers";
 import { VaultABI } from "../abi/VaultABI.js";
 import { vaultStateService } from "../services/vaultState.js";
-import { JsonRpcProvider, Contract, EventLog } from "ethers";
 
 const RPC_URL = "http://127.0.0.1:8545";
 const VAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
