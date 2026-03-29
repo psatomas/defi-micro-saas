@@ -1,3 +1,5 @@
+import { loadVaultState, saveVaultState } from "../storage/vaultRepository.js";
+
 export type VaultState = {
   tvl: bigint;
   totalShares: bigint;
@@ -5,9 +7,12 @@ export type VaultState = {
 };
 
 export function createVaultStateService() {
+
+  const persisted = loadVaultState();
+
   let state: VaultState = {
-    tvl: 0n,
-    totalShares: 0n,
+    tvl: persisted.tvl,
+    totalShares: persisted.totalShares,
     sharePrice: 0,
   };
 
@@ -31,6 +36,8 @@ export function createVaultStateService() {
       state.totalShares += shares;
 
       recomputeSharePrice();
+
+      saveVaultState(state.tvl, state.totalShares);
     },
 
     applyWithdraw(assets: bigint, shares: bigint) {
@@ -38,6 +45,8 @@ export function createVaultStateService() {
       state.totalShares -= shares;
 
       recomputeSharePrice();
+
+      saveVaultState(state.tvl, state.totalShares);
     },
   };
 }
