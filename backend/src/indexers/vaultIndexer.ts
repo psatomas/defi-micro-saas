@@ -12,36 +12,39 @@ export async function startVaultIndexer(): Promise<void> {
 
   const cursor = loadCursor();
 
-  console.log("[indexer] starting from block", cursor.lastIndexedBlock);
+  const fromBlock = cursor.lastIndexedBlock + 1;
 
-  const depositEvents = await vault.queryFilter(
-    "Deposited",
-    cursor.lastIndexedBlock
-  );
+  console.log("[indexer] starting from block", fromBlock);
 
-  const withdrawEvents = await vault.queryFilter(
-    "Withdrawn",
-    cursor.lastIndexedBlock
-  );
+  const depositEvents = await vault.queryFilter("Deposited", fromBlock);
+  const withdrawEvents = await vault.queryFilter("Withdrawn", fromBlock);
+
+  // merge events
+  const events: EventLog[] = [
+    ...depositEvents,
+    ...withdrawEvents
+  ] as EventLog[];
+
+  // deterministic ordering
+  events.sort((a, b) => {
+    if (a.blockNumber !== b.blockNumber) {
+      return a.blockNumber - b.blockNumber;
+    }
+    return a.index - b.index;
+  });
 
   let latestBlock = cursor.lastIndexedBlock;
 
-  for (const e of depositEvents) {
-    const event = e as EventLog;
+  for (const event of events) {
     const { assets, shares } = event.args;
 
-    vaultStateService.applyDeposit(assets, shares);
-
-    if (event.blockNumber > latestBlock) {
-      latestBlock = event.blockNumber;
+    if (event.eventName === "Deposited") {
+      vaultStateService.applyDeposit(assets, shares);
     }
-  }
 
-  for (const e of withdrawEvents) {
-    const event = e as EventLog;
-    const { assets, shares } = event.args;
-
-    vaultStateService.applyWithdraw(assets, shares);
+    if (event.eventName === "Withdrawn") {
+      vaultStateService.applyWithdraw(assets, shares);
+    }
 
     if (event.blockNumber > latestBlock) {
       latestBlock = event.blockNumber;
@@ -54,13 +57,14 @@ export async function startVaultIndexer(): Promise<void> {
 
   vault.on("Deposited", (user: string, assets: bigint, shares: bigint, event) => {
     vaultStateService.applyDeposit(assets, shares);
-
-    saveCursor({ lastIndexedBlock: event.log.blockNumber });
+    saveCursor({
+      lastIndexedBlock: Math.max(cursor.lastIndexedBlock, event.log.blockNumber)
+    });
   });
 
   vault.on("Withdrawn", (user: string, assets: bigint, shares: bigint, event) => {
-    vaultStateService.applyWithdraw(assets, shares);
-
-    saveCursor({ lastIndexedBlock: event.log.blockNumber });
-  });
-}
+    saveCursor({
+      lastIndexedBlock: Math.max(cursor.lastIndexedBlock, event.log.blockNumber)
+    });
+  })
+};
