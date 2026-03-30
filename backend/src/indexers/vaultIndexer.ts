@@ -5,6 +5,7 @@ import { loadCursor, saveCursor } from "./indexerCursor.js";
 
 const RPC_URL = "http://127.0.0.1:8545";
 const VAULT_ADDRESS = "0x0000000000000000000000000000000000000000";
+const CONFIRMATIONS = 6;
 
 export async function startVaultIndexer(): Promise<void> {
   const provider = new JsonRpcProvider(RPC_URL);
@@ -14,57 +15,66 @@ export async function startVaultIndexer(): Promise<void> {
 
   const fromBlock = cursor.lastIndexedBlock + 1;
 
-  console.log("[indexer] starting from block", fromBlock);
+  const chainHead = await provider.getBlockNumber();
+  const safeBlock = chainHead - CONFIRMATIONS;
 
-  const depositEvents = await vault.queryFilter("Deposited", fromBlock);
-  const withdrawEvents = await vault.queryFilter("Withdrawn", fromBlock);
+  console.log("[indexer] syncing", fromBlock, "→", safeBlock);
 
-  // merge events
-  const events: EventLog[] = [
-    ...depositEvents,
-    ...withdrawEvents
-  ] as EventLog[];
+  if (fromBlock > safeBlock) {
+    console.log("[indexer] no confirmed blocks to process");
+  } else {
+    const depositEvents = await vault.queryFilter("Deposited", fromBlock, safeBlock);
+    const withdrawEvents = await vault.queryFilter("Withdrawn", fromBlock, safeBlock);
 
-  // deterministic ordering
-  events.sort((a, b) => {
-    if (a.blockNumber !== b.blockNumber) {
-      return a.blockNumber - b.blockNumber;
+    const events: EventLog[] = [
+      ...depositEvents,
+      ...withdrawEvents
+    ] as EventLog[];
+
+    events.sort((a, b) => {
+      if (a.blockNumber !== b.blockNumber) {
+        return a.blockNumber - b.blockNumber;
+      }
+      return a.index - b.index;
+    });
+
+    let latestProcessedBlock = cursor.lastIndexedBlock;
+
+    for (const event of events) {
+      const { assets, shares } = event.args;
+
+      if (event.eventName === "Deposited") {
+        vaultStateService.applyDeposit(assets, shares);
+      }
+
+      if (event.eventName === "Withdrawn") {
+        vaultStateService.applyWithdraw(assets, shares);
+      }
+
+      if (event.blockNumber > latestProcessedBlock) {
+        latestProcessedBlock = event.blockNumber;
+      }
     }
-    return a.index - b.index;
-  });
 
-  let latestBlock = cursor.lastIndexedBlock;
+    saveCursor({ lastIndexedBlock: latestProcessedBlock });
 
-  for (const event of events) {
-    const { assets, shares } = event.args;
-
-    if (event.eventName === "Deposited") {
-      vaultStateService.applyDeposit(assets, shares);
-    }
-
-    if (event.eventName === "Withdrawn") {
-      vaultStateService.applyWithdraw(assets, shares);
-    }
-
-    if (event.blockNumber > latestBlock) {
-      latestBlock = event.blockNumber;
-    }
+    console.log("[indexer] historical sync complete");
   }
 
-  saveCursor({ lastIndexedBlock: latestBlock });
-
-  console.log("[indexer] historical sync complete");
-
+  // realtime listeners
   vault.on("Deposited", (user: string, assets: bigint, shares: bigint, event) => {
     vaultStateService.applyDeposit(assets, shares);
+
     saveCursor({
-      lastIndexedBlock: Math.max(cursor.lastIndexedBlock, event.log.blockNumber)
+      lastIndexedBlock: event.blockNumber
     });
   });
 
   vault.on("Withdrawn", (user: string, assets: bigint, shares: bigint, event) => {
+    vaultStateService.applyWithdraw(assets, shares);
+
     saveCursor({
-      lastIndexedBlock: Math.max(cursor.lastIndexedBlock, event.log.blockNumber)
+      lastIndexedBlock: event.blockNumber
     });
-  })
-};
+  });
+}
