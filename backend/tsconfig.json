@@ -1,15 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "rootDir": "./src",
-    "outDir": "./dist",
+    "esModuleInterop": true,
     "strict": true,
-    "types": ["node"],
-    "sourceMap": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true
+    "forceConsistentCasingInFileNames": true,
+    "rootDir": ".",       // include both src/ and scripts/
+    "outDir": "dist",
+    "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "scripts"]
 }
