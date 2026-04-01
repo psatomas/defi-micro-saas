@@ -4,14 +4,16 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract Vault {
-    using Math for uint256;
+contract Vault is ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using Math for uint256;
+
     IERC20 public immutable asset;
 
     uint256 public totalShares;
-    uint256 private _totalAssets;
+    uint256 public totalAssets;
     uint256 public maxDepositCap;
 
     mapping(address => uint256) public sharesOf;
@@ -20,73 +22,88 @@ contract Vault {
     event Withdrawn(address indexed user, uint256 assets, uint256 shares);
 
     constructor(address _asset, uint256 _maxDepositCap) {
+        require(_asset != address(0), "INVALID_ASSET");
+
         asset = IERC20(_asset);
         maxDepositCap = _maxDepositCap;
     }
 
     function deposit(uint256 assets)
         external
+        nonReentrant
         returns (uint256 shares)
     {
-        require(
-            _totalAssets + assets <= maxDepositCap,
-            "Deposit cap exceeded"
-    );
         require(assets > 0, "ZERO_ASSETS");
 
         uint256 balanceBefore = asset.balanceOf(address(this));
+
         asset.safeTransferFrom(msg.sender, address(this), assets);
+
         uint256 received = asset.balanceOf(address(this)) - balanceBefore;
+
         require(received > 0, "ZERO_RECEIVED");
 
-        if (totalShares == 0 || _totalAssets == 0) {
-            // first deposit, mint 1:1
+        require(
+            totalAssets + received <= maxDepositCap,
+            "DEPOSIT_CAP_EXCEEDED"
+        );
+
+        if (totalShares == 0 || totalAssets == 0) {
             shares = received;
         } else {
-            // calculate shares based on previous totalAssets (before this deposit)
-            shares = (received * totalShares) / _totalAssets;
-            require(shares > 0, "ZERO_SHARES"); // reject deposits too small
+            shares = (received * totalShares) / totalAssets;
+            require(shares > 0, "ZERO_SHARES");
         }
 
         sharesOf[msg.sender] += shares;
         totalShares += shares;
-        _totalAssets += received;
+        totalAssets += received;
 
         emit Deposited(msg.sender, received, shares);
     }
 
     function withdraw(uint256 shares)
         external
+        nonReentrant
         returns (uint256 assets)
     {
         require(shares > 0, "ZERO_SHARES");
+
         uint256 userShares = sharesOf[msg.sender];
         require(userShares >= shares, "INSUFFICIENT_SHARES");
 
-        // calculate assets proportional to shares (floor division to avoid over-withdraw)
-        assets = (shares * _totalAssets) / totalShares;
+        assets = (shares * totalAssets) / totalShares;
         require(assets > 0, "ZERO_ASSETS");
 
-        sharesOf[msg.sender] -= shares;
+        sharesOf[msg.sender] = userShares - shares;
         totalShares -= shares;
-        _totalAssets -= assets;
+        totalAssets -= assets;
 
         asset.safeTransfer(msg.sender, assets);
 
         emit Withdrawn(msg.sender, assets, shares);
     }
 
-    function totalAssets() external view returns (uint256) {
-        return _totalAssets;
+    function sharePrice()
+        public
+        view
+        returns (uint256)
+    {
+        if (totalShares == 0) return 1e18;
+
+        return Math.mulDiv(totalAssets, 1e18, totalShares);
     }
 
-    function sharePrice() public view returns (uint256) {
-    if (totalShares == 0) return 1e18;
-        return Math.mulDiv(_totalAssets, 1e18, totalShares);
+    function availableDeposit()
+        external
+        view
+        returns (uint256)
+    {
+        return maxDepositCap > totalAssets
+            ? maxDepositCap - totalAssets
+            : 0;
     }
-    function availableDeposit() external view returns (uint256) {
-        return maxDepositCap > _totalAssets ? maxDepositCap - _totalAssets : 0;
-    }
+
     function previewDeposit(uint256 assets)
         public
         view
@@ -94,11 +111,11 @@ contract Vault {
     {
         if (assets == 0) return 0;
 
-        if (totalShares == 0 || _totalAssets == 0) {
+        if (totalShares == 0 || totalAssets == 0) {
             return assets;
         }
 
-        return (assets * totalShares) / _totalAssets;
+        return (assets * totalShares) / totalAssets;
     }
 
     function previewWithdraw(uint256 shares)
@@ -108,6 +125,6 @@ contract Vault {
     {
         if (shares == 0 || totalShares == 0) return 0;
 
-        return (shares * _totalAssets) / totalShares;
+        return (shares * totalAssets) / totalShares;
     }
 }
